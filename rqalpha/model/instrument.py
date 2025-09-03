@@ -313,6 +313,8 @@ class Instrument(metaclass=PropertyReprMeta):
             return DEFAULT_ACCOUNT_TYPE.STOCK
         elif self.type == INSTRUMENT_TYPE.FUTURE:
             return DEFAULT_ACCOUNT_TYPE.FUTURE
+        elif self.type in [INSTRUMENT_TYPE.CRYPTO_SPOT, INSTRUMENT_TYPE.CRYPTO_FUTURE]:
+            return DEFAULT_ACCOUNT_TYPE.CRYPTO
         else:
             raise NotImplementedError
 

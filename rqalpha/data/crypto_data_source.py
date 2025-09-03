@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, date, timedelta
 from typing import Dict, Iterable, List, Optional, Sequence, Union
+from itertools import groupby
 
 from rqalpha.const import INSTRUMENT_TYPE, TRADING_CALENDAR_TYPE
 from rqalpha.interface import AbstractDataSource
@@ -90,7 +91,8 @@ class CryptoTradingCalendarStore(AbstractCalendarStore):
 class CryptoDataSource(AbstractDataSource):
     """加密货币数据源"""
     
-    CRYPTO_FIELDS = ['datetime', 'open', 'close', 'high', 'low', 'volume']
+    # 与RQAlpha标准格式保持一致
+    CRYPTO_FIELDS = ['datetime', 'open', 'close', 'high', 'low', 'prev_close', 'volume', 'total_turnover']
     CRYPTO_FUTURES_FIELDS = CRYPTO_FIELDS + ['settlement', 'prev_settlement', 'open_interest']
     
     def __init__(self, path: str, api_key: str = None, secret_key: str = None, testnet: bool = False):
@@ -103,6 +105,8 @@ class CryptoDataSource(AbstractDataSource):
             secret_key: Binance 密钥
             testnet: 是否使用测试网
         """
+        # print(f"=== CryptoDataSource.__init__ 被调用 ===")
+        # print(f"path: {path}")
         if not os.path.exists(path):
             os.makedirs(path)
         
@@ -363,10 +367,18 @@ class CryptoDataSource(AbstractDataSource):
         if frequency in ['tick', '1d']:
             # 获取第一个合约的数据范围
             for store in self._day_bars.values():
-                date_range = store.get_date_range(list(store.get_bars.keys())[0] if hasattr(store, 'get_bars') else None)
-                if date_range:
-                    start, end = date_range
-                    return convert_int_to_date(start).date(), convert_int_to_date(end).date()
+                try:
+                    # 直接检查H5文件中的数据集
+                    with h5py.File(store._file_path, 'r') as f:
+                        if len(f.keys()) > 0:
+                            first_symbol = list(f.keys())[0]
+                            date_range = store.get_date_range(first_symbol)
+                            if date_range:
+                                start, end = date_range
+                                return convert_int_to_date(start).date(), convert_int_to_date(end).date()
+                except Exception as e:
+                    print(f"Error getting date range: {e}")
+                    continue
         return date.min, date.max
     
     def get_yield_curve(self, start_date, end_date, tenor=None):

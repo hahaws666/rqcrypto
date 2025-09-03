@@ -147,12 +147,29 @@ def run(config, source_code=None, user_funcs=None):
         mod_handler.start_up()
 
         if not env.data_source:
-            env.set_data_source(BaseDataSource(
-                config.base.data_bundle_path, 
-                getattr(config.base, "future_info", {}),
-                const.DEFAULT_ACCOUNT_TYPE.FUTURE in config.base.accounts and config.base.futures_time_series_trading_parameters,
-                config.base.end_date
-            ))
+            # 检查是否使用加密货币数据源
+            # 如果数据包路径包含crypto或者账户类型包含CRYPTO，则使用CryptoDataSource
+            use_crypto_ds = (
+                'crypto' in config.base.data_bundle_path.lower() or
+                const.DEFAULT_ACCOUNT_TYPE.CRYPTO in config.base.accounts
+            )
+            
+            print(f"DEBUG main.py: data_bundle_path = {config.base.data_bundle_path}")
+            print(f"DEBUG main.py: accounts = {config.base.accounts}")
+            print(f"DEBUG main.py: use_crypto_ds = {use_crypto_ds}")
+            
+            if use_crypto_ds:
+                print("DEBUG main.py: Using CryptoDataSource")
+                from rqalpha.data.crypto_data_source import CryptoDataSource
+                env.set_data_source(CryptoDataSource(config.base.data_bundle_path))
+            else:
+                print("DEBUG main.py: Using BaseDataSource")
+                env.set_data_source(BaseDataSource(
+                    config.base.data_bundle_path, 
+                    getattr(config.base, "future_info", {}),
+                    const.DEFAULT_ACCOUNT_TYPE.FUTURE in config.base.accounts and config.base.futures_time_series_trading_parameters,
+                    config.base.end_date
+                ))
         if env.price_board is None:
             from rqalpha.data.bar_dict_price_board import BarDictPriceBoard
             env.price_board = BarDictPriceBoard()

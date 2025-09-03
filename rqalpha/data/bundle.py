@@ -184,9 +184,10 @@ def gen_crypto_trading_dates(d):
 
 
 def gen_crypto_spot_data(d):
-    """生成加密货币现货数据"""
+    """生成加密货币现货数据 - 符合RQAlpha标准格式"""
     from rqalpha.data.binance_api import get_binance_provider
     import pandas as pd
+    import numpy as np
     
     provider = get_binance_provider()
     symbols = provider.get_all_symbols(futures=False)
@@ -197,24 +198,36 @@ def gen_crypto_spot_data(d):
     with h5py.File(os.path.join(d, 'crypto_spot.h5'), 'w') as h5:
         for symbol in major_symbols:
             try:
-                # 获取最近30天的数据，使用limit参数而不是时间范围
+                # 获取最近30天的数据
                 df = provider.api.get_klines(symbol, '1d', limit=30, futures=False)
                 if not df.empty:
-                    # 直接使用numpy数组，避免DataFrame转换问题
-                    import numpy as np
-                    
                     # 提取数据
                     dates = [convert_date_to_int(d.date()) for d in df['open_time']]
                     opens = df['open'].values.astype(float)
+                    closes = df['close'].values.astype(float)
                     highs = df['high'].values.astype(float)
                     lows = df['low'].values.astype(float)
-                    closes = df['close'].values.astype(float)
                     volumes = df['volume'].values.astype(float)
                     
-                    # 创建结构化数组
-                    dtype = [('datetime', 'u8'), ('open', 'f8'), ('high', 'f8'), 
-                            ('low', 'f8'), ('close', 'f8'), ('volume', 'f8')]
-                    data = np.array(list(zip(dates, opens, highs, lows, closes, volumes)), dtype=dtype)
+                    # 计算缺失字段
+                    prev_closes = np.roll(closes, 1)
+                    prev_closes[0] = closes[0]  # 第一天使用当天收盘价
+                    
+                    # 加密货币没有涨跌停限制，设置为0
+                    limit_ups = np.zeros_like(closes)
+                    limit_downs = np.zeros_like(closes)
+                    
+                    # 计算成交额 (volume * close)
+                    total_turnovers = volumes * closes
+                    
+                    # 创建符合RQAlpha标准的结构化数组
+                    # 字段顺序: datetime, open, close, high, low, prev_close, limit_up, limit_down, volume, total_turnover
+                    dtype = [('datetime', 'i8'), ('open', 'f8'), ('close', 'f8'), ('high', 'f8'), 
+                            ('low', 'f8'), ('prev_close', 'f8'), ('limit_up', 'f8'), ('limit_down', 'f8'),
+                            ('volume', 'f8'), ('total_turnover', 'f8')]
+                    
+                    data = np.array(list(zip(dates, opens, closes, highs, lows, prev_closes, 
+                                           limit_ups, limit_downs, volumes, total_turnovers)), dtype=dtype)
                     
                     h5.create_dataset(symbol, data=data)
             except Exception as e:
@@ -223,9 +236,10 @@ def gen_crypto_spot_data(d):
 
 
 def gen_crypto_futures_data(d):
-    """生成加密货币期货数据"""
+    """生成加密货币期货数据 - 符合RQAlpha标准格式"""
     from rqalpha.data.binance_api import get_binance_provider
     import pandas as pd
+    import numpy as np
     
     provider = get_binance_provider()
     symbols = provider.get_all_symbols(futures=True)
@@ -236,24 +250,47 @@ def gen_crypto_futures_data(d):
     with h5py.File(os.path.join(d, 'crypto_futures.h5'), 'w') as h5:
         for symbol in major_symbols:
             try:
-                # 获取最近30天的数据，使用limit参数而不是时间范围
+                # 获取最近30天的数据
                 df = provider.api.get_klines(symbol, '1d', limit=30, futures=True)
                 if not df.empty:
-                    # 直接使用numpy数组，避免DataFrame转换问题
-                    import numpy as np
-                    
                     # 提取数据
                     dates = [convert_date_to_int(d.date()) for d in df['open_time']]
                     opens = df['open'].values.astype(float)
+                    closes = df['close'].values.astype(float)
                     highs = df['high'].values.astype(float)
                     lows = df['low'].values.astype(float)
-                    closes = df['close'].values.astype(float)
                     volumes = df['volume'].values.astype(float)
                     
-                    # 创建结构化数组
-                    dtype = [('datetime', 'u8'), ('open', 'f8'), ('high', 'f8'), 
-                            ('low', 'f8'), ('close', 'f8'), ('volume', 'f8')]
-                    data = np.array(list(zip(dates, opens, highs, lows, closes, volumes)), dtype=dtype)
+                    # 计算缺失字段
+                    prev_closes = np.roll(closes, 1)
+                    prev_closes[0] = closes[0]  # 第一天使用当天收盘价
+                    
+                    # 加密货币没有涨跌停限制，设置为0
+                    limit_ups = np.zeros_like(closes)
+                    limit_downs = np.zeros_like(closes)
+                    
+                    # 计算成交额 (volume * close)
+                    total_turnovers = volumes * closes
+                    
+                    # 期货特有字段
+                    settlements = closes  # 结算价使用收盘价
+                    prev_settlements = np.roll(settlements, 1)
+                    prev_settlements[0] = settlements[0]
+                    
+                    # 持仓量设置为0（加密货币期货数据中通常没有持仓量信息）
+                    open_interests = np.zeros_like(closes)
+                    
+                    # 创建符合RQAlpha标准的结构化数组
+                    # 字段顺序: datetime, open, close, high, low, prev_close, limit_up, limit_down, 
+                    #          volume, total_turnover, settlement, prev_settlement, open_interest
+                    dtype = [('datetime', 'i8'), ('open', 'f8'), ('close', 'f8'), ('high', 'f8'), 
+                            ('low', 'f8'), ('prev_close', 'f8'), ('limit_up', 'f8'), ('limit_down', 'f8'),
+                            ('volume', 'f8'), ('total_turnover', 'f8'), ('settlement', 'f8'), 
+                            ('prev_settlement', 'f8'), ('open_interest', 'f8')]
+                    
+                    data = np.array(list(zip(dates, opens, closes, highs, lows, prev_closes, 
+                                           limit_ups, limit_downs, volumes, total_turnovers,
+                                           settlements, prev_settlements, open_interests)), dtype=dtype)
                     
                     h5.create_dataset(symbol, data=data)
             except Exception as e:
@@ -417,7 +454,7 @@ STOCK_FIELDS = ['open', 'close', 'high', 'low', 'prev_close', 'limit_up', 'limit
 INDEX_FIELDS = ['open', 'close', 'high', 'low', 'prev_close', 'volume', 'total_turnover']
 FUTURES_FIELDS = STOCK_FIELDS + ['settlement', 'prev_settlement', 'open_interest']
 FUND_FIELDS = STOCK_FIELDS
-# 加密货币字段
+# 加密货币字段 - 与RQAlpha标准格式保持一致
 CRYPTO_SPOT_FIELDS = ['open', 'close', 'high', 'low', 'prev_close', 'volume', 'total_turnover']
 CRYPTO_FUTURES_FIELDS = CRYPTO_SPOT_FIELDS + ['settlement', 'prev_settlement', 'open_interest']
 

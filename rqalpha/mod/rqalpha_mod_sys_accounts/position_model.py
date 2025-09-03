@@ -592,3 +592,35 @@ class FuturePositionProxy(PositionProxy):
     sell_realized_pnl = deprecated_property("sell_realized_pnl", "sell_trading_pnl")
     buy_avg_holding_price = deprecated_property("buy_avg_holding_price", "buy_avg_open_price")
     sell_avg_holding_price = deprecated_property("sell_avg_holding_price", "sell_avg_open_price")
+
+
+class CryptoPosition(Position):
+    """加密货币持仓类"""
+    __repr_properties__ = (
+        "order_book_id", "direction", "quantity", "market_value", "trading_pnl", "position_pnl", "last_price"
+    )
+    __instrument_types__ = [INSTRUMENT_TYPE.CRYPTO_SPOT, INSTRUMENT_TYPE.CRYPTO_FUTURE]
+
+    def __init__(self, order_book_id, direction, init_quantity=0, init_price=None):
+        super(CryptoPosition, self).__init__(order_book_id, direction, init_quantity, init_price)
+
+    @property
+    def closable(self):
+        """可平仓数量（加密货币T+0交易，所有持仓都可平仓）"""
+        order_quantity = sum(o.unfilled_quantity for o in self._open_orders if o.position_effect in (
+            POSITION_EFFECT.CLOSE, POSITION_EFFECT.CLOSE_TODAY, POSITION_EFFECT.EXERCISE
+        ))
+        return self._quantity - order_quantity
+
+
+class CryptoPositionProxy(PositionProxy):
+    """加密货币持仓代理类"""
+    __repr_properties__ = (
+        "order_book_id", "positions"
+    )
+    __instrument_types__ = [INSTRUMENT_TYPE.CRYPTO_SPOT, INSTRUMENT_TYPE.CRYPTO_FUTURE]
+    
+    @property
+    def quantity(self):
+        """总持仓数量"""
+        return self.long.quantity - self.short.quantity
