@@ -210,6 +210,37 @@ class CryptoDataSource(AbstractDataSource):
             if ins_type is not None and ins_type in self._instruments_stores:
                 yield from self._instruments_stores[ins_type].get_instruments(id_or_syms)
     
+    def get_all_crypto_instruments(self, date: DateLike = None) -> List[Instrument]:
+        """
+        获取指定日期的所有加密货币合约
+        
+        Args:
+            date: 指定日期，如果为None则返回所有合约
+            
+        Returns:
+            List[Instrument]: 合约列表
+        """
+        instruments = []
+        
+        # 获取所有加密货币合约类型
+        crypto_types = [INSTRUMENT_TYPE.CRYPTO_SPOT, INSTRUMENT_TYPE.CRYPTO_FUTURE]
+        
+        for ins_type in crypto_types:
+            if ins_type in self._instruments_stores:
+                store = self._instruments_stores[ins_type]
+                # 获取该类型的所有合约（传入None表示获取所有）
+                type_instruments = list(store.get_instruments(None))
+                instruments.extend(type_instruments)
+        
+        # 如果指定了日期，可以在这里添加日期过滤逻辑
+        # 目前加密货币合约没有日期限制，所以返回所有合约
+        if date is not None:
+            # 可以在这里添加基于日期的过滤逻辑
+            # 例如：只返回在指定日期之前上市的合约
+            pass
+        
+        return instruments
+    
     def get_share_transformation(self, order_book_id):
         """获取股份变更（加密货币不需要）"""
         return None
