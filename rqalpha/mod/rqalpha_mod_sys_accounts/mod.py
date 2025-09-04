@@ -62,6 +62,10 @@ class AccountMod(AbstractMod):
             # 注入股票API
             # noinspection PyUnresolvedReferences
             from .api import api_stock
+        if DEFAULT_ACCOUNT_TYPE.CRYPTO in env.config.base.accounts:
+            # 注入加密货币API
+            # noinspection PyUnresolvedReferences
+            from .api import api_crypto
 
             # 启动融资股票池限制
             if mod_config.financing_stocks_restriction_enabled:
