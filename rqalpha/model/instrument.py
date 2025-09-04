@@ -469,6 +469,9 @@ class Instrument(metaclass=PropertyReprMeta):
             elif direction == POSITION_DIRECTION.SHORT:
                 margin_rate = self.get_short_margin_ratio(dt)
             return price * quantity * self.contract_multiplier * margin_rate * margin_multiplier
+        elif self.type in [INSTRUMENT_TYPE.CRYPTO_SPOT, INSTRUMENT_TYPE.CRYPTO_FUTURE]:
+            # 加密货币现货和期货都按全价计算
+            return price * quantity
         else:
             raise NotImplementedError
 

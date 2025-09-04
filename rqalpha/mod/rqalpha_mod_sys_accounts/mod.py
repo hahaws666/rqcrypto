@@ -66,6 +66,10 @@ class AccountMod(AbstractMod):
             # 注入加密货币API
             # noinspection PyUnresolvedReferences
             from .api import api_crypto
+            
+            # 为加密货币添加验证器
+            env.add_frontend_validator(pos_validator, INSTRUMENT_TYPE.CRYPTO_SPOT)
+            env.add_frontend_validator(pos_validator, INSTRUMENT_TYPE.CRYPTO_FUTURE)
 
             # 启动融资股票池限制
             if mod_config.financing_stocks_restriction_enabled:

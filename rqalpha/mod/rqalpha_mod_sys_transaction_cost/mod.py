@@ -23,6 +23,7 @@ from rqalpha.utils.i18n import gettext as _
 from rqalpha.utils.logger import user_log
 
 from .deciders import CNStockTransactionCostDecider, CNFutureTransactionCostDecider
+from .crypto_decider import CryptoTransactionCostDecider
 
 
 class TransactionCostMod(AbstractMod):
@@ -53,6 +54,10 @@ class TransactionCostMod(AbstractMod):
         env.set_transaction_cost_decider(INSTRUMENT_TYPE.FUTURE, CNFutureTransactionCostDecider(
             futures_commission_multiplier
         ))
+        
+        # 为加密货币添加交易成本计算器
+        env.set_transaction_cost_decider(INSTRUMENT_TYPE.CRYPTO_SPOT, CryptoTransactionCostDecider())
+        env.set_transaction_cost_decider(INSTRUMENT_TYPE.CRYPTO_FUTURE, CryptoTransactionCostDecider())
 
     def tear_down(self, code, exception=None):
         pass

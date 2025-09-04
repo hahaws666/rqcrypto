@@ -269,7 +269,7 @@ class Order(object):
         """
         [float] 冻结价格
         """
-        if np.isnan(self._frozen_price):
+        if self._frozen_price is None or np.isnan(self._frozen_price):
             raise RuntimeError("Frozen price of order {} is not supposed to be nan.".format(self.order_id))
         return self._frozen_price
 

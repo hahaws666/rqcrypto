@@ -30,12 +30,16 @@ from rqalpha.core.events import Event, EVENT
 from rqalpha.environment import Environment
 from rqalpha.model.instrument import Instrument
 from rqalpha.model.order import LimitOrder, MarketOrder, Order, OrderStyle, ALGO_ORDER_STYLES
+from rqalpha.utils import is_valid_price
 from rqalpha.utils.arg_checker import apply_rules, verify_that
 from rqalpha.utils.datetime_func import to_date
 from rqalpha.utils.exception import RQInvalidArgument
 from rqalpha.utils.i18n import gettext as _
-from rqalpha.utils.logger import user_log
+from rqalpha.utils.logger import user_log, user_system_log
 from rqalpha.utils.typing import DateLike
+
+# 使用Decimal 解决浮点数运算精度问题
+getcontext().prec = 10
 
 
 def _get_crypto_account():
@@ -48,6 +52,125 @@ def _get_crypto_position(order_book_id, direction=POSITION_DIRECTION.LONG):
     """获取加密货币持仓"""
     account = _get_crypto_account()
     return account.get_position(order_book_id, direction)
+
+
+def _get_account_position_ins(id_or_ins):
+    """获取账户、持仓和合约信息"""
+    ins = assure_instrument(id_or_ins)
+    try:
+        account = Environment.get_instance().portfolio.accounts[DEFAULT_ACCOUNT_TYPE.CRYPTO]
+    except KeyError:
+        raise KeyError(_(
+                u"order_book_id: {order_book_id} needs crypto account, please set and try again!"
+            ).format(order_book_id=ins.order_book_id))
+    position = account.get_position(ins.order_book_id, POSITION_DIRECTION.LONG)
+    return account, position, ins
+
+
+def _round_order_quantity(ins, quantity, method: Callable = int) -> int:
+    """四舍五入订单数量"""
+    round_lot = ins.round_lot
+    try:
+        # 对于加密货币，如果计算出的数量太小，至少返回最小交易单位
+        rounded_quantity = method(Decimal(quantity) / Decimal(round_lot)) * round_lot
+        if rounded_quantity == 0 and abs(quantity) > 0:
+            # 如果原数量不为0但四舍五入后为0，返回最小交易单位
+            return round_lot if quantity > 0 else -round_lot
+        return rounded_quantity
+    except ValueError:
+        raise
+
+
+def _get_order_style_price(order_book_id, style):
+    """获取订单类型对应的价格"""
+    if isinstance(style, LimitOrder):
+        return style.get_limit_price()
+    env = Environment.get_instance()
+    if isinstance(style, MarketOrder):
+        return env.data_proxy.get_last_price(order_book_id)
+    if isinstance(style, ALGO_ORDER_STYLES):
+        price, _ = env.data_proxy.get_algo_bar(order_book_id, style, env.calendar_dt)
+        return price
+    raise RuntimeError(f"no support {style} order style")
+
+
+def _submit_order(ins, amount, side, position_effect, style, current_quantity, auto_switch_order_value, zero_amount_as_exception=True):
+    """提交订单的核心函数"""
+    env = Environment.get_instance()
+    if isinstance(style, LimitOrder) and np.isnan(style.get_limit_price()):
+        raise RQInvalidArgument(_(u"Limit order price should not be nan."))
+    price = env.data_proxy.get_last_price(ins.order_book_id)
+    if not is_valid_price(price):
+        reason = _(u"Order Creation Failed: [{order_book_id}] No market data").format(order_book_id=ins.order_book_id)
+        env.order_creation_failed(order_book_id=ins.order_book_id, reason=reason)
+        return
+
+    if (side == SIDE.BUY and current_quantity != -amount) or (side == SIDE.SELL and current_quantity != abs(amount)):
+        # 对于加密货币，也需要四舍五入到最小交易单位
+        amount = _round_order_quantity(ins, amount)
+
+    if amount == 0:
+        if zero_amount_as_exception:
+            reason = _(u"Order Creation Failed: 0 order quantity, order_book_id={order_book_id}").format(order_book_id=ins.order_book_id)
+            env.order_creation_failed(order_book_id=ins.order_book_id, reason=reason)
+        return
+    
+    # 使用 Order.__from_create__ 创建订单
+    order = Order.__from_create__(ins.order_book_id, abs(amount), side, style, position_effect)
+    
+    if side == SIDE.BUY and auto_switch_order_value:
+        account, position, ins = _get_account_position_ins(ins)
+        # 对于加密货币，我们简化现金验证逻辑
+        if account.cash < amount * price:
+            user_system_log.warn(_(
+                "insufficient cash, use all remaining cash({}) to create order"
+            ).format(account.cash))
+            return _order_value(account, position, ins, account.cash, style)
+    
+    return env.submit_order(order)
+
+
+def _order_shares(ins, amount, style, quantity, auto_switch_order_value, zero_amount_as_exception=True):
+    """按数量下单的辅助函数"""
+    side, position_effect = (SIDE.BUY, POSITION_EFFECT.OPEN) if amount > 0 else (SIDE.SELL, POSITION_EFFECT.CLOSE)
+    return _submit_order(ins, amount, side, position_effect, style, quantity, auto_switch_order_value, zero_amount_as_exception)
+
+
+def _order_value(account, position, ins, cash_amount, style, zero_amount_as_exception=True):
+    """按金额下单的辅助函数"""
+    env = Environment.get_instance()
+    if cash_amount > 0:
+        cash_amount = min(cash_amount, account.cash)
+    if isinstance(style, LimitOrder):
+        price = style.get_limit_price()
+    else:
+        price = env.data_proxy.get_last_price(ins.order_book_id)
+        if not is_valid_price(price):
+            reason = _(u"Order Creation Failed: [{order_book_id}] No market data").format(order_book_id=ins.order_book_id)
+            env.order_creation_failed(order_book_id=ins.order_book_id, reason=reason)
+            return
+
+    amount = int(Decimal(cash_amount) / Decimal(price))
+    round_lot = int(ins.round_lot)
+    if cash_amount > 0:
+        amount = _round_order_quantity(ins, amount)
+        while amount > 0:
+            expected_transaction_cost = env.get_order_transaction_cost(Order.__from_create__(
+                ins.order_book_id, amount, SIDE.BUY, LimitOrder(price), POSITION_EFFECT.OPEN
+            ))
+            if amount * price + expected_transaction_cost <= cash_amount:
+                break
+            amount -= round_lot
+        else:
+            if zero_amount_as_exception:
+                reason = _(u"Order Creation Failed: 0 order quantity, order_book_id={order_book_id}").format(order_book_id=ins.order_book_id)
+                env.order_creation_failed(order_book_id=ins.order_book_id, reason=reason)
+            return
+
+    if amount < 0:
+        amount = max(amount, -position.closable)
+
+    return _order_shares(ins, amount, style, position.quantity, auto_switch_order_value=False, zero_amount_as_exception=zero_amount_as_exception)
 
 
 @export_as_api
@@ -83,35 +206,15 @@ def order_shares(id_or_ins, amount, price_or_style=None, price=None, style=None)
     if amount == 0:
         return None
     
-    # 确定交易方向和数量
-    if amount > 0:
-        side = SIDE.BUY
-        quantity = amount
-    else:
-        side = SIDE.SELL
-        quantity = -amount
+    # 获取账户和持仓信息
+    account, position, ins = _get_account_position_ins(id_or_ins)
     
-    # 处理价格和订单类型
-    if price_or_style is None:
-        price = None
-        order_style = MarketOrder()
-    elif isinstance(price_or_style, OrderStyle):
-        price = None
-        order_style = price_or_style
-    else:
-        price = price_or_style
-        order_style = LimitOrder(price)
-    
-    # 创建订单
-    order_obj = Order()
-    order_obj._order_book_id = order_book_id
-    order_obj._quantity = quantity
-    order_obj._side = side
-    order_obj._style = order_style
-    order_obj._position_effect = POSITION_EFFECT.OPEN
-    
-    # 提交订单
-    return order_obj
+    # 使用辅助函数处理订单
+    auto_switch_order_value = Environment.get_instance().config.mod.sys_accounts.auto_switch_order_value
+    return _order_shares(
+        ins, amount, cal_style(price, style, price_or_style), position.quantity,
+        auto_switch_order_value
+    )
 
 
 @export_as_api
@@ -147,46 +250,11 @@ def order_value(id_or_ins, cash_amount, price_or_style=None, price=None, style=N
     if cash_amount == 0:
         return None
     
-    # 获取当前价格
-    if price_or_style is None or isinstance(price_or_style, OrderStyle):
-        # 市价单，需要获取当前价格
-        from rqalpha.api import get_current_data
-        current_data = get_current_data()
-        if order_book_id not in current_data:
-            raise RQInvalidArgument(_("Cannot get current price for {}").format(order_book_id))
-        current_price = current_data[order_book_id].last_price
-    else:
-        current_price = price_or_style
+    # 获取账户和持仓信息
+    account, position, ins = _get_account_position_ins(id_or_ins)
     
-    # 计算交易数量
-    if cash_amount > 0:
-        side = SIDE.BUY
-        quantity = cash_amount / current_price
-    else:
-        side = SIDE.SELL
-        quantity = -cash_amount / current_price
-    
-    # 处理价格和订单类型
-    if price_or_style is None:
-        price = None
-        order_style = MarketOrder()
-    elif isinstance(price_or_style, OrderStyle):
-        price = None
-        order_style = price_or_style
-    else:
-        price = price_or_style
-        order_style = LimitOrder(price)
-    
-    # 创建订单
-    order_obj = Order()
-    order_obj._order_book_id = order_book_id
-    order_obj._quantity = quantity
-    order_obj._side = side
-    order_obj._style = order_style
-    order_obj._position_effect = POSITION_EFFECT.OPEN
-    
-    # 提交订单
-    return order_obj
+    # 使用辅助函数处理订单
+    return _order_value(account, position, ins, cash_amount, cal_style(price, style, price_or_style))
 
 
 @export_as_api
@@ -218,19 +286,18 @@ def order_target_value(id_or_ins, cash_amount, price_or_style=None, price=None, 
     if instrument.type not in [INSTRUMENT_TYPE.CRYPTO_SPOT, INSTRUMENT_TYPE.CRYPTO_FUTURE]:
         raise RQInvalidArgument(_("order_target_value only support crypto instruments"))
     
-    # 获取当前持仓
-    position = _get_crypto_position(order_book_id)
-    current_value = position.market_value
+    # 获取账户和持仓信息
+    account, position, ins = _get_account_position_ins(id_or_ins)
+    open_style, close_style = calc_open_close_style(price, style, price_or_style)
     
-    # 计算需要调整的金额
-    target_value = cash_amount
-    delta_value = target_value - current_value
+    if cash_amount == 0:
+        return _submit_order(
+            ins, position.closable, SIDE.SELL, POSITION_EFFECT.CLOSE, close_style, position.quantity, False
+        )
     
-    if abs(delta_value) < 1e-6:  # 几乎相等，不需要交易
-        return None
-    
-    # 使用order_value进行交易
-    return order_value(order_book_id, delta_value, price_or_style, price, style)
+    _delta = cash_amount - position.market_value
+    _style = open_style if _delta > 0 else close_style
+    return _order_value(account, position, ins, _delta, _style, zero_amount_as_exception=False)
 
 
 @export_as_api
@@ -262,15 +329,11 @@ def order_percent(id_or_ins, percent, price_or_style=None, price=None, style=Non
     if instrument.type not in [INSTRUMENT_TYPE.CRYPTO_SPOT, INSTRUMENT_TYPE.CRYPTO_FUTURE]:
         raise RQInvalidArgument(_("order_percent only support crypto instruments"))
     
-    # 获取投资组合总价值
-    account = _get_crypto_account()
-    total_value = account.total_value
+    # 获取账户和持仓信息
+    account, position, ins = _get_account_position_ins(id_or_ins)
     
-    # 计算交易金额
-    cash_amount = total_value * percent
-    
-    # 使用order_value进行交易
-    return order_value(order_book_id, cash_amount, price_or_style, price, style)
+    # 使用辅助函数处理订单
+    return _order_value(account, position, ins, account.total_value * percent, cal_style(price, style, price_or_style))
 
 
 @export_as_api
@@ -302,15 +365,18 @@ def order_target_percent(id_or_ins, percent, price_or_style=None, price=None, st
     if instrument.type not in [INSTRUMENT_TYPE.CRYPTO_SPOT, INSTRUMENT_TYPE.CRYPTO_FUTURE]:
         raise RQInvalidArgument(_("order_target_percent only support crypto instruments"))
     
-    # 获取投资组合总价值
-    account = _get_crypto_account()
-    total_value = account.total_value
+    # 获取账户和持仓信息
+    account, position, ins = _get_account_position_ins(id_or_ins)
+    open_style, close_style = calc_open_close_style(price, style, price_or_style)
     
-    # 计算目标金额
-    target_value = total_value * percent
+    if percent == 0:
+        return _submit_order(
+            ins, position.closable, SIDE.SELL, POSITION_EFFECT.CLOSE, close_style, position.quantity, False
+        )
     
-    # 使用order_target_value进行交易
-    return order_target_value(order_book_id, target_value, price_or_style, price, style)
+    _delta = account.total_value * percent - position.market_value
+    _style = open_style if _delta > 0 else close_style
+    return _order_value(account, position, ins, _delta, _style, zero_amount_as_exception=False)
 
 
 @export_as_api
@@ -343,18 +409,14 @@ def order_to(order_book_id, quantity, price_or_style=None, price=None, style=Non
         raise RQInvalidArgument(_("order_to only support crypto instruments"))
     
     # 获取当前持仓
-    position = _get_crypto_position(order_book_id)
-    current_quantity = position.quantity
-    
-    # 计算需要调整的数量
-    delta_quantity = quantity - current_quantity
-    
-    if abs(delta_quantity) < 1e-6:  # 几乎相等，不需要交易
-        return []
-    
-    # 使用order_shares进行交易
-    order_obj = order_shares(order_book_id, delta_quantity, price_or_style, price, style)
-    return [order_obj] if order_obj else []
+    position = Environment.get_instance().portfolio.get_position(order_book_id, POSITION_DIRECTION.LONG)
+    open_style, close_style = calc_open_close_style(price, style, price_or_style)
+    quantity = quantity - position.quantity
+    _style = open_style if quantity > 0 else close_style
+    result_order = order_shares(order_book_id, quantity, price, _style, price_or_style)
+    if result_order:
+        return [result_order]
+    return []
 
 
 @export_as_api
@@ -375,24 +437,7 @@ def order(order_book_id, quantity, price_or_style=None, price=None, style=None):
     Returns:
         List[Order]: 订单列表
     """
-    # 获取合约信息
-    instrument = assure_instrument(order_book_id)
-    order_book_id = assure_order_book_id(instrument)
-    
-    # 计算订单类型
-    order_style = cal_style(price_or_style, price, style)
-    
-    # 确定交易方向
-    side = SIDE.BUY if quantity > 0 else SIDE.SELL
-    quantity = abs(quantity)
-    
-    # 创建订单
-    order_obj = Order()
-    order_obj._order_book_id = order_book_id
-    order_obj._quantity = quantity
-    order_obj._side = side
-    order_obj._style = order_style
-    order_obj._position_effect = POSITION_EFFECT.OPEN
-    
-    # 提交订单
-    return [order_obj]
+    result_order = order_shares(order_book_id, quantity, price, style, price_or_style)
+    if result_order:
+        return [result_order]
+    return []

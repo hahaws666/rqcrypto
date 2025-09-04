@@ -62,18 +62,25 @@ def handle_bar(context, bar_dict):
                     # 获取持仓（多头方向）
                     position = crypto_account.get_position(symbol, POSITION_DIRECTION.LONG)
                     
-                    if current_price > avg_price and position.quantity == 0:
+                    # 获取持仓数量（确保是数值）
+                    position_quantity = float(position.quantity) if hasattr(position, 'quantity') else 0.0
+                    
+                    if current_price > avg_price and position_quantity == 0:
                         # 价格高于均线且无持仓，买入
                         # 计算买入数量（10万金额）
                         buy_amount = 100000 / current_price
+                        print(f"  🚀 尝试买入 {symbol}: {current_price:.2f}, 数量: {buy_amount:.4f}")
                         order_shares(symbol, buy_amount)  # 买入指定数量
-                        print(f"  🚀 买入 {symbol}: {current_price:.2f}, 数量: {buy_amount:.4f}")
-                    elif current_price < avg_price and position.quantity > 0:
+                        print(f"  ✅ 买入订单已提交 {symbol}")
+                    elif current_price < avg_price and position_quantity > 0:
                         # 价格低于均线且有持仓，卖出
-                        order_shares(symbol, -position.quantity)  # 卖出所有持仓
-                        print(f"  💰 卖出 {symbol}: {current_price:.2f}, 数量: {position.quantity:.4f}")
+                        print(f"  💰 尝试卖出 {symbol}: {current_price:.2f}, 数量: {position_quantity:.4f}")
+                        order_shares(symbol, -position_quantity)  # 卖出所有持仓
+                        print(f"  ✅ 卖出订单已提交 {symbol}")
                 except Exception as e:
                     print(f"  ❌ 交易 {symbol} 时出错: {e}")
+                    import traceback
+                    print(f"  错误详情: {traceback.format_exc()}")
                 
                 # 显示交易信号
                 if current_price > avg_price:
@@ -91,8 +98,9 @@ def handle_bar(context, bar_dict):
             crypto_account = context.portfolio.accounts[DEFAULT_ACCOUNT_TYPE.CRYPTO]
             # 获取持仓（多头方向）
             position = crypto_account.get_position(symbol, POSITION_DIRECTION.LONG)
-            if position.quantity > 0:
-                print(f"{symbol}: {position.quantity:.4f} 单位, 市值: {position.market_value:.2f}")
+            position_quantity = float(position.quantity) if hasattr(position, 'quantity') else 0.0
+            if position_quantity > 0:
+                print(f"{symbol}: {position_quantity:.4f} 单位, 市值: {position.market_value:.2f}")
         except Exception as e:
             import traceback
             print(f"获取 {symbol} 持仓信息时出错: {e}")

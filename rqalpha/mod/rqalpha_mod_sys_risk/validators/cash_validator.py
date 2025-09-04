@@ -50,3 +50,9 @@ class CashValidator(AbstractFrontendValidator):
         if (account is None) or (order.position_effect != POSITION_EFFECT.OPEN):
             return None
         return validate_cash(self._env, order, account.cash)
+    
+    def can_submit_order(self, order: Order, account: Optional[Account] = None) -> bool:
+        """兼容性方法，用于向后兼容"""
+        if (account is None) or (order.position_effect != POSITION_EFFECT.OPEN):
+            return True
+        return validate_cash(self._env, order, account.cash) is None
