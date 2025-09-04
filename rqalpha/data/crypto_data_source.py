@@ -241,6 +241,40 @@ class CryptoDataSource(AbstractDataSource):
         
         return instruments
     
+    def get_crypto_instruments_df(self, date: DateLike = None) -> pd.DataFrame:
+        """
+        获取指定日期的所有加密货币合约，返回DataFrame格式
+        
+        Args:
+            date: 指定日期，如果为None则返回所有合约
+            
+        Returns:
+            pd.DataFrame: 包含合约信息的DataFrame
+        """
+        instruments = self.get_all_crypto_instruments(date)
+        
+        # 构建DataFrame数据
+        data = []
+        for i, instrument in enumerate(instruments):
+            data.append({
+                'abbrev_symbol': instrument.symbol,
+                'order_book_id': instrument.order_book_id,
+                'sector_code': getattr(instrument, 'sector_code', None),
+                'symbol': instrument.symbol,
+                'type': instrument.type.name if hasattr(instrument.type, 'name') else str(instrument.type),
+                'exchange': str(instrument.exchange),
+                'round_lot': instrument.round_lot,
+                'tick_size': getattr(instrument, 'tick_size', None),
+                'contract_multiplier': getattr(instrument, 'contract_multiplier', 1),
+                'underlying_symbol': getattr(instrument, 'underlying_symbol', None),
+                'quote_currency': getattr(instrument, 'quote_currency', None),
+                'listed_date': instrument.listed_date,
+                'de_listed_date': instrument.de_listed_date
+            })
+        
+        df = pd.DataFrame(data)
+        return df
+    
     def get_share_transformation(self, order_book_id):
         """获取股份变更（加密货币不需要）"""
         return None

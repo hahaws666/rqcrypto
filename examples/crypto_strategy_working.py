@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from rqalpha import run_func
 from rqalpha.const import INSTRUMENT_TYPE, DEFAULT_ACCOUNT_TYPE, POSITION_DIRECTION
 from rqalpha.api import *
+from rqalpha.data.crypto_data_source import CryptoDataSource
 
 
 def init(context):
@@ -25,9 +26,17 @@ def init(context):
     print(f"数据源类型: {type(env.data_source)}")
     print(f"数据源类名: {env.data_source.__class__.__name__}")
     print(f"数据源模块: {env.data_source.__class__.__module__}")
+
+    context.crypto_data_source = CryptoDataSource("./test_crypto_bundle")
     
-    # 选择要交易的加密货币
+    # 获取所有加密货币合约的DataFrame格式
+    all_instruments_df = context.crypto_data_source.get_crypto_instruments_df()
+    print("所有加密货币合约:")
+    print(all_instruments_df[['abbrev_symbol', 'order_book_id', 'type', 'symbol', 'exchange']].head(10))
+    
+    # 选择要交易的加密货币（从DataFrame中获取order_book_id）
     context.symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT']
+    print(f"\n选择的交易对: {context.symbols}")
     
     print("加密货币策略初始化完成")
     print(f"交易标的: {context.symbols}")
