@@ -69,14 +69,16 @@ def _get_account_position_ins(id_or_ins):
 
 def _round_order_quantity(ins, quantity, method: Callable = int) -> int:
     """四舍五入订单数量"""
-    round_lot = ins.round_lot
+    # round_lot = ins.round_lot
     try:
-        # 对于加密货币，如果计算出的数量太小，至少返回最小交易单位
-        rounded_quantity = method(Decimal(quantity) / Decimal(round_lot)) * round_lot
-        if rounded_quantity == 0 and abs(quantity) > 0:
-            # 如果原数量不为0但四舍五入后为0，返回最小交易单位
-            return round_lot if quantity > 0 else -round_lot
-        return rounded_quantity
+        # 对于加密货币，暂时注释掉最小交易单位限制，直接返回原数量
+        # rounded_quantity = method(Decimal(quantity) / Decimal(round_lot)) * round_lot
+        # if rounded_quantity == 0 and abs(quantity) > 0:
+        #     # 如果原数量不为0但四舍五入后为0，返回最小交易单位
+        #     return round_lot if quantity > 0 else -round_lot
+        # return rounded_quantity
+        # return int(quantity)  # 直接返回整数化的数量
+        return quantity
     except ValueError:
         raise
 
@@ -133,6 +135,7 @@ def _submit_order(ins, amount, side, position_effect, style, current_quantity, a
 def _order_shares(ins, amount, style, quantity, auto_switch_order_value, zero_amount_as_exception=True):
     """按数量下单的辅助函数"""
     side, position_effect = (SIDE.BUY, POSITION_EFFECT.OPEN) if amount > 0 else (SIDE.SELL, POSITION_EFFECT.CLOSE)
+    print(f"submitting crypto order: {ins}, {amount}, {style}, {quantity}, {auto_switch_order_value}, {zero_amount_as_exception}")
     return _submit_order(ins, amount, side, position_effect, style, quantity, auto_switch_order_value, zero_amount_as_exception)
 
 
@@ -195,6 +198,7 @@ def order_shares(id_or_ins, amount, price_or_style=None, price=None, style=None)
     Returns:
         Order: 订单对象
     """
+    print(f"order_shares: {id_or_ins}, {amount}, {price_or_style}, {price}, {style}")
     order_book_id = assure_order_book_id(id_or_ins)
     instrument = assure_instrument(order_book_id)
     

@@ -92,6 +92,7 @@ def handle_bar(context, bar_dict):
     
     # 显示当前持仓
     print("\n当前持仓:")
+
     for symbol in context.symbols:
         try:
             # 获取加密货币账户
@@ -101,6 +102,8 @@ def handle_bar(context, bar_dict):
             position_quantity = float(position.quantity) if hasattr(position, 'quantity') else 0.0
             if position_quantity > 0:
                 print(f"{symbol}: {position_quantity:.4f} 单位, 市值: {position.market_value:.2f}")
+            else:
+                print(f"{symbol}: 没有持仓")
         except Exception as e:
             import traceback
             print(f"获取 {symbol} 持仓信息时出错: {e}")
@@ -134,7 +137,14 @@ def run_crypto_strategy():
                 "enabled": True,
                 "matching_type": "current_bar"
             },
-
+            "sys_transaction_cost": {
+                "enabled": True,
+                "crypto_commission_rate": 0.001,  # 加密货币手续费率 0.1%
+                "crypto_min_commission": 0.0,     # 最小手续费 0
+                "stock_commission_multiplier": 1,  # 股票手续费倍率
+                "futures_commission_multiplier": 1,  # 期货手续费倍率
+                "tax_multiplier": 1  # 印花税倍率
+            }
         }
     }
     

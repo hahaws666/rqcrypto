@@ -56,8 +56,14 @@ class TransactionCostMod(AbstractMod):
         ))
         
         # 为加密货币添加交易成本计算器
-        env.set_transaction_cost_decider(INSTRUMENT_TYPE.CRYPTO_SPOT, CryptoTransactionCostDecider())
-        env.set_transaction_cost_decider(INSTRUMENT_TYPE.CRYPTO_FUTURE, CryptoTransactionCostDecider())
+        # 从配置中获取加密货币手续费参数
+        crypto_commission_rate = getattr(mod_config, 'crypto_commission_rate', 0.001)  # 默认0.1%
+        crypto_min_commission = getattr(mod_config, 'crypto_min_commission', 0.0)  # 默认0
+        
+        env.set_transaction_cost_decider(INSTRUMENT_TYPE.CRYPTO_SPOT, 
+                                       CryptoTransactionCostDecider(crypto_commission_rate, crypto_min_commission))
+        env.set_transaction_cost_decider(INSTRUMENT_TYPE.CRYPTO_FUTURE, 
+                                       CryptoTransactionCostDecider(crypto_commission_rate, crypto_min_commission))
 
     def tear_down(self, code, exception=None):
         pass
