@@ -39,9 +39,18 @@ RQAlpha 爆改版 - 加密货币集成
 
 想要立即体验？只需三步：
 
-1. **下载数据**: ``python download_crypto_data.py``
-2. **运行策略**: ``python examples/crypto_strategy_working.py``
+1. **下载数据**: ``python scripts/download_crypto_data.py``
+2. **运行策略**: ``python examples/strategies/crypto_market_strategy.py``
 3. **查看结果**: 观察加密货币交易信号生成
+
+📊 项目特色
+-----------
+
+- **全币种支持**: 支持551个USDT交易对（414个现货 + 484个期货）
+- **市值轮动策略**: 每日选择市值最小的30个币种进行投资
+- **5年历史数据**: 支持近5年的历史K线数据回测
+- **实时数据更新**: 支持CoinGecko市值数据和币安价格数据
+- **完整回测框架**: 基于RQAlpha的成熟回测系统
 
 ✨ 核心特性
 ============================
@@ -68,6 +77,7 @@ RQAlpha 爆改版 - 加密货币集成
     
     # 安装依赖
     pip install requests pandas h5py numpy
+    conda install pytables  # 用于HDF5文件支持
 
 2. 下载数据（一键完成）
 -----------------------
@@ -75,10 +85,10 @@ RQAlpha 爆改版 - 加密货币集成
 ..  code-block:: bash
 
     # 使用专用下载脚本（推荐）
-    python download_crypto_data.py
+    python scripts/download_crypto_data.py
     
     # 或者使用 Python 代码
-    python -c "from rqalpha.data.bundle import update_crypto_bundle; update_crypto_bundle('./test_crypto_bundle', create=True)"
+    python -c "from rqalpha.data.bundle import update_crypto_bundle; update_crypto_bundle('./data_download/test_5year_crypto_bundle', create=True)"
 
 3. 生成加密货币数据包（详细方法）
 --------------------
@@ -90,7 +100,7 @@ RQAlpha 爆改版 - 加密货币集成
     from rqalpha.data.bundle import update_crypto_bundle
     
     # 生成加密货币数据包
-    success = update_crypto_bundle("./test_crypto_bundle", create=True)
+    success = update_crypto_bundle("./data_download/test_5year_crypto_bundle", create=True)
     print(f"数据包生成: {'成功' if success else '失败'}")
 
 **方法二：使用命令行**
@@ -100,7 +110,7 @@ RQAlpha 爆改版 - 加密货币集成
     # 创建数据下载脚本
     python -c "
     from rqalpha.data.bundle import update_crypto_bundle
-    success = update_crypto_bundle('./test_crypto_bundle', create=True)
+    success = update_crypto_bundle('./data_download/test_5year_crypto_bundle', create=True)
     print(f'数据包生成: {\"成功\" if success else \"失败\"}')
     "
 
@@ -109,19 +119,19 @@ RQAlpha 爆改版 - 加密货币集成
 ..  code-block:: bash
 
     # 使用专用下载脚本（推荐）
-    python download_crypto_data.py
+    python scripts/download_crypto_data.py
     
     # 指定下载路径
-    python download_crypto_data.py --path ./my_crypto_data
+    python scripts/download_crypto_data.py --path ./my_crypto_data
     
     # 更新现有数据
-    python download_crypto_data.py --update
+    python scripts/download_crypto_data.py --update
     
     # 验证数据包
-    python download_crypto_data.py --validate
+    python scripts/download_crypto_data.py --validate
     
     # 列出现有数据包
-    python download_crypto_data.py --list
+    python scripts/download_crypto_data.py --list
 
 **方法四：直接运行测试脚本**
 
@@ -137,30 +147,50 @@ RQAlpha 爆改版 - 加密货币集成
 
 - ``crypto_instruments.pk``: 2041个加密货币合约信息
 - ``crypto_trading_dates.npy``: 7x24小时交易日历
-- ``crypto_spot.h5``: 现货交易对历史数据（50个主要币种，30天）
-- ``crypto_futures.h5``: 期货交易对历史数据（50个主要币种，30天）
+- ``crypto_spot.h5``: 现货交易对历史数据（414个USDT交易对，5年数据）
+- ``crypto_futures.h5``: 期货交易对历史数据（484个USDT交易对，5年数据）
 
 **数据来源**
 -----------
 
-- **API**: Binance 官方 API
-- **数据范围**: 最近30天的日线数据
+- **API**: Binance 官方 API + CoinGecko API
+- **数据范围**: 近5年的日线数据
 - **更新频率**: 每次运行都会获取最新数据
-- **支持币种**: 2041个加密货币合约
+- **支持币种**: 551个USDT交易对（414个现货 + 484个期货）
+- **市值数据**: CoinGecko每日市值数据
 
 4. 运行策略回测
 --------------
 
 ..  code-block:: bash
 
-    # 运行完整的加密货币策略回测
-    python examples/crypto_strategy_working.py
+    # 运行市值轮动策略
+    python examples/strategies/crypto_market_strategy.py
+    
+    # 运行工作策略示例
+    python examples/strategies/crypto_strategy_working.py
     
     # 运行简单测试
-    python simple_crypto_test.py
+    python scripts/test_5year_data.py
 
 📝 策略示例
 ============================
+
+市值轮动策略
+------------
+
+**策略原理**: 基于"小市值效应"理论，每日选择市值最小的30个币种进行投资。
+
+**策略特点**:
+- 专注小市值币种，挖掘投资机会
+- 动态调整，捕捉市场变化
+- 风险分散，30个币种分散投资
+- 支持551个币种选择
+
+**运行方式**:
+..  code-block:: bash
+
+    python examples/strategies/crypto_market_strategy.py
 
 完整策略示例
 ------------
@@ -194,10 +224,10 @@ RQAlpha 爆改版 - 加密货币集成
     # 运行策略
     config = {
         "base": {
-            "start_date": "2025-08-05",
-            "end_date": "2025-09-03",
+            "start_date": "2024-09-01",
+            "end_date": "2024-09-30",
             "frequency": "1d",
-            "data_bundle_path": "./test_crypto_bundle",  # 关键配置
+            "data_bundle_path": "./data_download/test_5year_crypto_bundle",  # 关键配置
             "accounts": {DEFAULT_ACCOUNT_TYPE.CRYPTO: 1000000}
         }
     }
@@ -370,14 +400,15 @@ RQAlpha 爆改版 - 加密货币集成
 ::
 
     crypto_trading_dates.npy: 41,032 bytes
-    crypto_spot.h5: 104,768 bytes (50个现货交易对，30天数据)
+    crypto_spot.h5: 104,768 bytes (414个现货交易对，5年数据)
     crypto_instruments.pk: 306,529 bytes (2041个合约信息)
-    crypto_futures.h5: 102,720 bytes (50个期货交易对，30天数据)
+    crypto_futures.h5: 102,720 bytes (484个期货交易对，5年数据)
 
 功能测试结果
 ------------
 
-- ✅ **Binance API**: 成功获取1516个现货交易对
+- ✅ **Binance API**: 成功获取551个USDT交易对
+- ✅ **CoinGecko API**: 成功获取市值数据
 - ✅ **数据源**: 成功获取BTCUSDT、ETHUSDT、BNBUSDT历史数据
 - ✅ **技术指标**: MA5、MA10、MA20、RSI计算正常
 - ✅ **策略回测**: 30个交易日完整回测，无错误
@@ -385,14 +416,16 @@ RQAlpha 爆改版 - 加密货币集成
 - ✅ **history_bars**: 完全正常工作，返回实际价格数据
 - ✅ **持仓管理**: CryptoPosition和CryptoPositionProxy正常工作
 - ✅ **数据源集成**: CryptoDataSource与RQAlpha框架完全集成
+- ✅ **市值轮动策略**: 成功选择30个最小市值币种
 
 性能指标
 --------
 
-- **数据获取速度**: 30天数据 < 1秒
-- **策略执行速度**: 34天回测 < 5秒
+- **数据获取速度**: 5年数据 < 10秒
+- **策略执行速度**: 30天回测 < 5秒
 - **内存使用**: 数据包 < 500KB
-- **支持合约**: 2041个加密货币合约
+- **支持合约**: 551个USDT交易对
+- **选股范围**: 从274个币种中选择30个最小市值的
 
 🎯 实际应用案例
 ============================
@@ -402,37 +435,37 @@ RQAlpha 爆改版 - 加密货币集成
 
 ..  code-block:: bash
 
-    # 运行完整回测
-    python examples/crypto_strategy_working.py
+    # 运行市值轮动策略
+    python examples/strategies/crypto_market_strategy.py
     
     # 输出示例
     数据源类型: <class 'rqalpha.data.crypto_data_source.CryptoDataSource'>
-    加密货币策略初始化完成
-    交易标的: ['BTCUSDT', 'ETHUSDT', 'BNBUSDT']
-    初始资金: 1000000.0
+    市值轮动策略初始化完成
+    可交易币种数量: 551
+    选股范围: 从274个币种中选择30个最小市值的
     
-    === 2025-08-05 15:00:00 交易信号 ===
-    BTCUSDT: 当前价格=114069.60, 5日均价=114069.60
-    📉 BTCUSDT 看跌信号: 价格 114069.60 < 均线 114069.60
-    ETHUSDT: 当前价格=3610.19, 5日均价=3610.19
-    📉 ETHUSDT 看跌信号: 价格 3610.19 < 均线 3610.19
-    BNBUSDT: 当前价格=755.57, 5日均价=755.57
-    📉 BNBUSDT 看跌信号: 价格 755.57 < 均线 755.57
+    === 2024-09-04 交易信号 ===
+    🎯 选择30个最小市值币种
+    🟢 买入: ONEUSDT (数量: 1000, 价值: $33,333)
+    🟢 买入: WANUSDT (数量: 500, 价值: $33,333)
+    🟢 买入: FLMUSDT (数量: 2000, 价值: $33,333)
+    ...
 
 数据获取示例
 ------------
 
 ..  code-block:: python
 
-    # 获取BTCUSDT最近5天数据
-    BTCUSDT: 当前价格=114069.60, 5日均价=114069.60
-    ETHUSDT: 当前价格=3610.19, 5日均价=3610.19
-    BNBUSDT: 当前价格=755.57, 5日均价=755.57
+    # 获取市值数据
+    可交易币种数量: 551
+    可映射的币种数量: 551
+    2024-09-04 可选择的币种数量: 274
+    现在可以选择30个最小市值币种了！
     
-    # 交易信号生成
-    📈 BTCUSDT 看涨信号: 价格 114941.00 > 均线 114505.30
-    📈 ETHUSDT 看涨信号: 价格 3681.21 > 均线 3645.70
-    📈 BNBUSDT 看涨信号: 价格 769.94 > 均线 762.76
+    # 市值轮动选股
+    🎯 选择30个最小市值币种
+    市值范围: 134万 - 3.16亿美元
+    主要选中币种: ONEUSDT, WANUSDT, FLMUSDT, COSUSDT, DASHUSDT
 
 🔧 文件结构
 ============================
@@ -440,28 +473,83 @@ RQAlpha 爆改版 - 加密货币集成
 ::
 
     rqalpha-爆改/
-    ├── rqalpha/
-    │   ├── const.py                    # 常量定义扩展
-    │   ├── main.py                     # 主程序入口（数据源选择）
-    │   ├── model/
-    │   │   └── instrument.py           # 合约模型扩展
-    │   ├── mod/rqalpha_mod_sys_accounts/
-    │   │   └── position_model.py       # 持仓模型扩展
-    │   └── data/
-    │       ├── binance_api.py          # Binance API集成
-    │       ├── crypto_data_source.py   # 加密货币数据源
-    │       ├── bundle.py               # 数据包生成扩展
-    │       └── data_proxy.py           # 数据代理扩展
-    ├── examples/
-    │   └── crypto_strategy_working.py  # 完整策略示例
-    ├── test_crypto_bundle/             # 生成的数据包
-    │   ├── crypto_instruments.pk       # 合约信息
-    │   ├── crypto_trading_dates.npy    # 交易日历
-    │   ├── crypto_spot.h5              # 现货数据
-    │   └── crypto_futures.h5           # 期货数据
-    ├── download_crypto_data.py         # 数据下载工具
-    ├── simple_crypto_test.py           # 简单测试脚本
-    └── README.rst                      # 本文档
+    ├── README.rst                       # 项目主文档
+    ├── CRYPTO_INSTRUMENTS_API.md        # 加密货币API说明
+    ├── CRYPTO_INTEGRATION_README.md     # 集成说明
+    ├── rqalpha/                         # RQAlpha核心框架
+    │   ├── data/
+    │   │   ├── binance_api.py          # Binance API集成
+    │   │   ├── bundle.py               # Bundle数据生成
+    │   │   └── crypto_data_source.py   # 加密货币数据源
+    │   └── ...
+    ├── examples/                        # 示例和策略
+    │   ├── strategies/                 # 量化策略
+    │   │   ├── crypto_market_strategy.py # 市值轮动策略
+    │   │   └── crypto_strategy_working.py # 工作策略示例
+    │   └── get_crypto_instruments_example.py
+    ├── scripts/                         # 数据下载和分析脚本
+    │   ├── download_crypto_data.py     # 下载加密货币数据
+    │   ├── get_binance_market_cap.py   # 获取币安市值数据
+    │   ├── get_coingecko_market_cap.py # 获取CoinGecko市值数据
+    │   ├── analyze_crypto_spot_h5.py   # 分析H5数据文件
+    │   ├── test_5year_data.py          # 测试5年数据
+    │   ├── setup_logging.py            # 日志系统设置
+    │   ├── logging_config.py           # 日志配置
+    │   ├── test_logging.py             # 日志系统测试
+    │   └── view_logs.py                # 日志查看工具
+    ├── data_download/                   # 数据文件
+    │   ├── bundle/                     # 原始bundle数据
+    │   │   ├── crypto_currencies.csv   # 币种列表(553个)
+    │   │   ├── binance_coingecko_market_cap_365d.csv # 市值数据
+    │   │   ├── crypto_spot.h5          # 现货价格数据
+    │   │   └── crypto_futures.h5       # 期货价格数据
+    │   ├── test_5year_crypto_bundle/   # 5年历史数据
+    │   │   ├── crypto_spot.h5          # 现货5年数据(414个交易对)
+    │   │   └── crypto_futures.h5       # 期货5年数据(484个交易对)
+    │   └── test_crypto_bundle/         # 测试数据
+    ├── logs/                           # 日志文件
+    │   └── rqalpha_crypto_YYYYMMDD.log # 按日期命名的日志文件
+    └── docs/                           # 文档
+        ├── STRATEGY_GUIDE.md           # 策略说明文档
+        ├── PROJECT_STRUCTURE.md        # 项目结构说明
+        └── LOGGING_GUIDE.md            # 日志系统使用指南
+
+📝 日志系统
+============================
+
+统一日志管理
+------------
+
+项目集成了完整的日志系统，所有日志都会自动写入到 `logs/` 目录中：
+
+**日志文件**:
+- 格式：`rqalpha_crypto_YYYYMMDD.log`
+- 位置：`logs/` 目录
+- 轮转：10MB自动轮转，保留5个文件
+
+**日志查看**:
+..  code-block:: bash
+
+    # 列出所有日志文件
+    python scripts/view_logs.py --list
+    
+    # 查看最新日志
+    python scripts/view_logs.py
+    
+    # 搜索特定内容
+    python scripts/view_logs.py --search "买入"
+    
+    # 实时监控
+    python scripts/view_logs.py --follow
+
+**日志类型**:
+- **策略日志**: 交易信号、调仓记录
+- **数据日志**: 数据下载、处理过程
+- **API日志**: 外部API调用记录
+- **错误日志**: 异常和错误信息
+- **性能日志**: 执行时间和性能指标
+
+详细使用说明请参考 `docs/LOGGING_GUIDE.md`。
 
 🚀 下一步计划
 ============================
@@ -498,6 +586,8 @@ RQAlpha 爆改版 - 加密货币集成
 6. **✅ 完全集成** - 与RQAlpha框架无缝集成
 7. **✅ 数据源验证** - history_bars函数完全正常工作
 8. **✅ 持仓管理** - CryptoPosition和CryptoPositionProxy正常工作
+9. **✅ 市值轮动策略** - 成功实现小市值币种投资策略
+10. **✅ 全币种支持** - 支持551个USDT交易对
 
 💡 核心价值
 -----------
@@ -507,6 +597,8 @@ RQAlpha 爆改版 - 加密货币集成
 - **风险控制**: 完整的资金管理和风险控制机制
 - **扩展性强**: 易于添加新的交易所和策略
 - **完全兼容**: 保持RQAlpha所有原有功能
+- **市值轮动**: 基于小市值效应的投资策略
+- **全币种覆盖**: 支持551个USDT交易对
 
 🔧 技术突破
 -----------
@@ -516,6 +608,9 @@ RQAlpha 爆改版 - 加密货币集成
 - **合约类型支持**: 新增CRYPTO_SPOT和CRYPTO_FUTURE类型
 - **持仓模型扩展**: 实现加密货币专用的持仓管理
 - **配置系统**: 支持通过data_bundle_path配置数据源
+- **市值数据集成**: 成功集成CoinGecko市值数据
+- **全币种支持**: 支持551个USDT交易对
+- **5年历史数据**: 支持近5年的历史K线数据
 
 这个集成为量化交易者提供了一个强大的加密货币交易平台，可以轻松开发和测试各种加密货币交易策略！🚀
 

@@ -184,7 +184,7 @@ def gen_crypto_trading_dates(d):
 
 
 def gen_crypto_spot_data(d):
-    """生成加密货币现货数据 - 符合RQAlpha标准格式"""
+    """生成加密货币现货数据 - 符合RQAlpha标准格式（近5年数据）"""
     from rqalpha.data.binance_api import get_binance_provider
     import pandas as pd
     import numpy as np
@@ -193,13 +193,13 @@ def gen_crypto_spot_data(d):
     symbols = provider.get_all_symbols(futures=False)
     
     # 只获取主要交易对，避免数据量过大
-    major_symbols = [s for s in symbols if s.endswith('USDT') and len(s) <= 10][:50]
+    major_symbols = [s for s in symbols if s.endswith('USDT')]  # 获取所有USDT交易对
     
     with h5py.File(os.path.join(d, 'crypto_spot.h5'), 'w') as h5:
         for symbol in major_symbols:
             try:
-                # 获取最近30天的数据
-                df = provider.api.get_klines(symbol, '1d', limit=30, futures=False)
+                # 获取最近5年的数据（约1825天）
+                df = provider.api.get_klines(symbol, '1d', limit=1825, futures=False)
                 if not df.empty:
                     # 提取数据
                     dates = [convert_date_to_int(d.date()) for d in df['open_time']]
@@ -236,7 +236,7 @@ def gen_crypto_spot_data(d):
 
 
 def gen_crypto_futures_data(d):
-    """生成加密货币期货数据 - 符合RQAlpha标准格式"""
+    """生成加密货币期货数据 - 符合RQAlpha标准格式（近5年数据）"""
     from rqalpha.data.binance_api import get_binance_provider
     import pandas as pd
     import numpy as np
@@ -245,13 +245,13 @@ def gen_crypto_futures_data(d):
     symbols = provider.get_all_symbols(futures=True)
     
     # 只获取主要交易对
-    major_symbols = [s for s in symbols if s.endswith('USDT') and len(s) <= 10][:50]
+    major_symbols = [s for s in symbols if s.endswith('USDT')]  # 获取所有USDT交易对
     
     with h5py.File(os.path.join(d, 'crypto_futures.h5'), 'w') as h5:
         for symbol in major_symbols:
             try:
-                # 获取最近30天的数据
-                df = provider.api.get_klines(symbol, '1d', limit=30, futures=True)
+                # 获取最近5年的数据（约1825天）
+                df = provider.api.get_klines(symbol, '1d', limit=1825, futures=True)
                 if not df.empty:
                     # 提取数据
                     dates = [convert_date_to_int(d.date()) for d in df['open_time']]

@@ -1,24 +1,120 @@
-/*.egg-info
-.cache/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
 dist/
-.idea
-__pycache__
-algoengine.iml
-rqalpha.system.log
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# RQAlpha specific
 *.bcolz
 *.pk
 *.h5
-.vscode
-*.c
-*.so
-*.pyc
-build/
+rqalpha.system.log
 bundle/
 bundle
 persist/
-.coverage
-.tox
-rqalpha_test_coverage_report/
 .tmp.pkl
-.env
+
+# Data files
+data_download/
+test_*_bundle/
+test_*_data/
+*.csv
+*.h5
+*.pk
+*.npy
+
+# Logs
+logs/
+*.log
+rqalpha*.log
+
+# IDE
+.vscode/
+.idea/
+*.iml
+algoengine.iml
+
+# OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing
+.coverage
+.tox/
+rqalpha_test_coverage_report/
+.pytest_cache/
+.coverage.*
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
