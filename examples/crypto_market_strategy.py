@@ -253,4 +253,4 @@ if __name__ == "__main__":
     
     # 运行策略
     from rqalpha import run_func
-    # run_func(init=init, handle_bar=handle_bar, config=config)
+    run_func(init=init, handle_bar=handle_bar, config=config)

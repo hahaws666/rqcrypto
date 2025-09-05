@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-工作版加密货币策略示例
-正确配置数据源，使用爆改后的 RQAlpha 进行加密货币交易
+增强版加密货币策略示例 - 带详细账户检测
+在每次交易时自动检测账户状态，包括资金、持仓、订单等
 """
 
 import os
@@ -13,9 +13,110 @@ from datetime import datetime, date
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from rqalpha import run_func
-from rqalpha.const import INSTRUMENT_TYPE, DEFAULT_ACCOUNT_TYPE, POSITION_DIRECTION
+from rqalpha.const import INSTRUMENT_TYPE, DEFAULT_ACCOUNT_TYPE, POSITION_DIRECTION, ORDER_STATUS
 from rqalpha.api import *
-from rqalpha.data.crypto_data_source import CryptoDataSource
+
+
+def check_account_status(context, symbol=None, action=None):
+    """检查账户状态"""
+    print(f"\n{'='*60}")
+    print(f"🔍 账户状态检测 - {context.now}")
+    if symbol and action:
+        print(f"📊 交易标的: {symbol} | 操作: {action}")
+    print(f"{'='*60}")
+    
+    try:
+        # 获取加密货币账户
+        crypto_account = context.portfolio.accounts[DEFAULT_ACCOUNT_TYPE.CRYPTO]
+        
+        # 1. 账户基本信息
+        print(f"💰 账户资金:")
+        print(f"  - 总价值: {crypto_account.total_value:.2f} USDT")
+        print(f"  - 可用资金: {crypto_account.cash:.2f} USDT")
+        print(f"  - 持仓市值: {crypto_account.market_value:.2f} USDT")
+        print(f"  - 冻结资金: {crypto_account.frozen_cash:.2f} USDT")
+        
+        # 2. 持仓详情
+        print(f"\n📈 持仓详情:")
+        total_position_value = 0
+        for sym in context.symbols:
+            try:
+                position = crypto_account.get_position(sym, POSITION_DIRECTION.LONG)
+                position_quantity = float(position.quantity) if hasattr(position, 'quantity') else 0.0
+                if position_quantity > 0:
+                    position_value = position.market_value
+                    total_position_value += position_value
+                    print(f"  - {sym}: {position_quantity:.6f} 单位, 市值: {position_value:.2f} USDT")
+                else:
+                    print(f"  - {sym}: 无持仓")
+            except Exception as e:
+                print(f"  - {sym}: 获取持仓失败 - {e}")
+        
+        # 3. 订单状态
+        print(f"\n📋 订单状态:")
+        try:
+            # 获取所有订单
+            orders = get_orders()
+            if orders:
+                active_orders = [order for order in orders if order.status in [ORDER_STATUS.PENDING_NEW, ORDER_STATUS.ACTIVE]]
+                if active_orders:
+                    for order in active_orders:
+                        print(f"  - {order.order_book_id}: {order.side} {order.quantity:.6f} @ {order.price:.2f} [{order.status}]")
+                else:
+                    print(f"  - 无活跃订单")
+            else:
+                print(f"  - 无订单记录")
+        except Exception as e:
+            print(f"  - 获取订单失败: {e}")
+        
+        # 4. 交易统计
+        print(f"\n📊 交易统计:")
+        try:
+            trades = get_trades()
+            if trades:
+                total_trades = len(trades)
+                total_volume = sum(trade.quantity for trade in trades)
+                total_turnover = sum(trade.price * trade.quantity for trade in trades)
+                print(f"  - 总交易次数: {total_trades}")
+                print(f"  - 总交易量: {total_volume:.6f}")
+                print(f"  - 总成交额: {total_turnover:.2f} USDT")
+            else:
+                print(f"  - 无交易记录")
+        except Exception as e:
+            print(f"  - 获取交易统计失败: {e}")
+        
+        # 5. 风险指标
+        print(f"\n⚠️ 风险指标:")
+        try:
+            # 计算仓位集中度
+            if total_position_value > 0:
+                for sym in context.symbols:
+                    try:
+                        position = crypto_account.get_position(sym, POSITION_DIRECTION.LONG)
+                        position_quantity = float(position.quantity) if hasattr(position, 'quantity') else 0.0
+                        if position_quantity > 0:
+                            position_ratio = (position.market_value / total_position_value) * 100
+                            print(f"  - {sym} 仓位占比: {position_ratio:.1f}%")
+                    except:
+                        pass
+            
+            # 计算资金利用率
+            cash_ratio = (crypto_account.market_value / crypto_account.total_value) * 100 if crypto_account.total_value > 0 else 0
+            print(f"  - 资金利用率: {cash_ratio:.1f}%")
+            
+            # 计算可用资金比例
+            available_ratio = (crypto_account.cash / crypto_account.total_value) * 100 if crypto_account.total_value > 0 else 0
+            print(f"  - 可用资金比例: {available_ratio:.1f}%")
+            
+        except Exception as e:
+            print(f"  - 计算风险指标失败: {e}")
+        
+        print(f"{'='*60}")
+        
+    except Exception as e:
+        print(f"❌ 账户检测失败: {e}")
+        import traceback
+        print(f"错误详情: {traceback.format_exc()}")
 
 
 def init(context):
@@ -26,21 +127,16 @@ def init(context):
     print(f"数据源类型: {type(env.data_source)}")
     print(f"数据源类名: {env.data_source.__class__.__name__}")
     print(f"数据源模块: {env.data_source.__class__.__module__}")
-
-    context.crypto_data_source = CryptoDataSource("./test_crypto_bundle")
     
-    # 获取所有加密货币合约的DataFrame格式
-    all_instruments_df = context.crypto_data_source.get_crypto_instruments_df()
-    print("所有加密货币合约:")
-    print(all_instruments_df[['abbrev_symbol', 'order_book_id', 'type', 'symbol', 'exchange']].head(10))
-    
-    # 选择要交易的加密货币（从DataFrame中获取order_book_id）
+    # 选择要交易的加密货币
     context.symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT']
-    print(f"\n选择的交易对: {context.symbols}")
     
     print("加密货币策略初始化完成")
     print(f"交易标的: {context.symbols}")
     print(f"初始资金: {context.portfolio.total_value}")
+    
+    # 初始账户检测
+    check_account_status(context, "初始化", "开始")
 
 
 def before_trading(context):
@@ -79,13 +175,29 @@ def handle_bar(context, bar_dict):
                         # 计算买入数量（10万金额）
                         buy_amount = 100000 / current_price
                         print(f"  🚀 尝试买入 {symbol}: {current_price:.2f}, 数量: {buy_amount:.4f}")
+                        
+                        # 交易前账户检测
+                        check_account_status(context, symbol, "买入前")
+                        
                         order_shares(symbol, buy_amount)  # 买入指定数量
                         print(f"  ✅ 买入订单已提交 {symbol}")
+                        
+                        # 交易后账户检测
+                        check_account_status(context, symbol, "买入后")
+                        
                     elif current_price < avg_price and position_quantity > 0:
                         # 价格低于均线且有持仓，卖出
                         print(f"  💰 尝试卖出 {symbol}: {current_price:.2f}, 数量: {position_quantity:.4f}")
+                        
+                        # 交易前账户检测
+                        check_account_status(context, symbol, "卖出前")
+                        
                         order_shares(symbol, -position_quantity)  # 卖出所有持仓
                         print(f"  ✅ 卖出订单已提交 {symbol}")
+                        
+                        # 交易后账户检测
+                        check_account_status(context, symbol, "卖出后")
+                        
                 except Exception as e:
                     print(f"  ❌ 交易 {symbol} 时出错: {e}")
                     import traceback
@@ -168,8 +280,7 @@ def run_crypto_strategy():
 
 
 if __name__ == "__main__":
-    print("开始运行工作版加密货币策略...")
-    print("注意：这个版本展示了问题所在，实际需要正确的数据源配置")
+    print("开始运行增强版加密货币策略（带账户检测）...")
     try:
         result = run_crypto_strategy()
         print("\n" + "="*50)
