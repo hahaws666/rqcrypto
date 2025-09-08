@@ -266,6 +266,7 @@ class AnalyserMod(AbstractMod):
         DEFAULT_ACCOUNT_TYPE.STOCK: [],
         DEFAULT_ACCOUNT_TYPE.FUTURE: ['position_pnl', 'trading_pnl', 'daily_pnl', 'margin'],
         DEFAULT_ACCOUNT_TYPE.BOND: [],
+        DEFAULT_ACCOUNT_TYPE.CRYPTO: [],
     }
 
     def _to_account_record(self, date, account):
@@ -298,12 +299,24 @@ class AnalyserMod(AbstractMod):
         else:
             position = long or short
             if position:
-                for field in ['margin', 'contract_multiplier', 'last_price']:
-                    data[field] = self._safe_convert(getattr(position, field))
+                # 检查是否是加密货币持仓，加密货币没有margin属性
+                if hasattr(position, 'margin'):
+                    for field in ['margin', 'contract_multiplier', 'last_price']:
+                        data[field] = self._safe_convert(getattr(position, field, None))
+                else:
+                    # 加密货币持仓的处理
+                    data['margin'] = 0  # 加密货币没有保证金
+                    data['contract_multiplier'] = 1  # 加密货币合约乘数为1
+                    data['last_price'] = self._safe_convert(getattr(position, 'last_price', None))
+            
             direction_pos_iter = ((pos.direction, pos) for pos in (long, short) if pos)
             for direction_prefix, pos in direction_pos_iter:
                 data[direction_prefix + "_pnl"] = self._safe_convert(getattr(pos, "pnl", None))
-                data[direction_prefix + "_margin"] = self._safe_convert(pos.margin)
+                # 安全地获取margin属性
+                if hasattr(pos, 'margin'):
+                    data[direction_prefix + "_margin"] = self._safe_convert(pos.margin)
+                else:
+                    data[direction_prefix + "_margin"] = 0  # 加密货币没有保证金
                 data[direction_prefix + "_market_value"] = self._safe_convert(pos.market_value)
                 data[direction_prefix + "_quantity"] = self._safe_convert(pos.quantity)
                 data[direction_prefix + "_avg_open_price"] = self._safe_convert(getattr(pos, "avg_price", None))

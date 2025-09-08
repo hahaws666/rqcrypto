@@ -34,7 +34,7 @@ strategy_logger = get_logger("strategy")
 data_logger = get_logger("data")
 api_logger = get_logger("api")
 
-def log_trade_action(action, symbol, quantity=None, price=None, value=None):
+def log_trade_action(action, symbol, quantity=None, price=None, value=None, order_result=None):
     """
     记录交易动作
     
@@ -44,6 +44,7 @@ def log_trade_action(action, symbol, quantity=None, price=None, value=None):
         quantity: 数量
         price: 价格
         value: 价值
+        order_result: 订单结果
     """
     if action == "buy":
         message = f"🟢 买入 {symbol}"
@@ -60,6 +61,13 @@ def log_trade_action(action, symbol, quantity=None, price=None, value=None):
         message += f" 价值: ${value:,.0f}"
     
     strategy_logger.info(message)
+    
+    # 记录订单结果
+    if order_result is not None:
+        if order_result:
+            strategy_logger.info(f"✅ 订单提交成功: {symbol}")
+        else:
+            strategy_logger.error(f"❌ 订单提交失败: {symbol}")
 
 def log_portfolio_status(portfolio):
     """

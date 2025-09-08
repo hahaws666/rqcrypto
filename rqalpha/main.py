@@ -151,7 +151,8 @@ def run(config, source_code=None, user_funcs=None):
             # 如果数据包路径包含crypto或者账户类型包含CRYPTO，则使用CryptoDataSource
             use_crypto_ds = (
                 'crypto' in config.base.data_bundle_path.lower() or
-                const.DEFAULT_ACCOUNT_TYPE.CRYPTO in config.base.accounts
+                const.DEFAULT_ACCOUNT_TYPE.CRYPTO in config.base.accounts or
+                'CRYPTO' in config.base.accounts
             )
             
             print(f"DEBUG main.py: data_bundle_path = {config.base.data_bundle_path}")

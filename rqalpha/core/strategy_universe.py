@@ -40,6 +40,18 @@ class StrategyUniverse(object):
         if new_set != self._set:
             self._set = new_set
             Environment.get_instance().event_bus.publish_event(Event(EVENT.POST_UNIVERSE_CHANGED, universe=self._set))
+    
+    def add(self, symbol):
+        """添加单个币种到universe中"""
+        if symbol not in self._set:
+            self._set.add(symbol)
+            Environment.get_instance().event_bus.publish_event(Event(EVENT.POST_UNIVERSE_CHANGED, universe=self._set))
+    
+    def remove(self, symbol):
+        """从universe中移除单个币种"""
+        if symbol in self._set:
+            self._set.remove(symbol)
+            Environment.get_instance().event_bus.publish_event(Event(EVENT.POST_UNIVERSE_CHANGED, universe=self._set))
 
     def get(self):
         return copy.copy(self._set)

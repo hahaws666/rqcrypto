@@ -42,7 +42,10 @@ class SimulationEventSource(AbstractEventSource):
 
     def _get_universe(self):
         universe = self._env.get_universe()
-        if len(universe) == 0 and DEFAULT_ACCOUNT_TYPE.STOCK.name not in self._config.base.accounts:
+        # 对于加密货币账户，允许空的universe
+        if (len(universe) == 0 and 
+            DEFAULT_ACCOUNT_TYPE.STOCK.name not in self._config.base.accounts and
+            DEFAULT_ACCOUNT_TYPE.CRYPTO.name not in self._config.base.accounts):
             raise patch_user_exc(RuntimeError(_(
                 "Current universe is empty. Please use subscribe function before trade"
             )), force=True)

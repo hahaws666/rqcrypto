@@ -198,6 +198,43 @@ class CryptoDataSource(AbstractDataSource):
         """获取交易日历"""
         return {t: store.get_trading_calendar() for t, store in self._calendar_providers.items()}
     
+    def get_trading_calendar(self, trading_calendar_type=None):
+        """获取交易日历（单数形式）"""
+        if trading_calendar_type is None:
+            # 默认返回加密货币交易日历
+            trading_calendar_type = TRADING_CALENDAR_TYPE.CRYPTO
+        
+        if trading_calendar_type in self._calendar_providers:
+            return self._calendar_providers[trading_calendar_type].get_trading_calendar()
+        return None
+    
+    def get_previous_trading_date(self, dt):
+        """获取上一个交易日"""
+        if isinstance(dt, datetime):
+            dt = dt.date()
+        return dt - timedelta(days=1)
+    
+    def get_next_trading_date(self, dt):
+        """获取下一个交易日"""
+        if isinstance(dt, datetime):
+            dt = dt.date()
+        return dt + timedelta(days=1)
+    
+    def get_last_price(self, order_book_id, dt=None):
+        """获取最新价格"""
+        instrument = self.instrument(order_book_id)
+        if instrument is None:
+            return np.nan
+        
+        if dt is None:
+            dt = datetime.now()
+        
+        bar = self.get_bar(instrument, dt, '1d')
+        if bar is None:
+            return np.nan
+        
+        return bar.get('close', np.nan)
+    
     def get_instruments(self, id_or_syms=None, types=None):
         """获取合约信息"""
         if id_or_syms is not None:
@@ -209,6 +246,15 @@ class CryptoDataSource(AbstractDataSource):
         for ins_type, id_or_syms in type_id_iter:
             if ins_type is not None and ins_type in self._instruments_stores:
                 yield from self._instruments_stores[ins_type].get_instruments(id_or_syms)
+    
+    def instrument(self, order_book_id):
+        """获取单个合约信息"""
+        for ins_type in self._instruments_stores:
+            store = self._instruments_stores[ins_type]
+            instrument = store.instrument(order_book_id)
+            if instrument is not None:
+                return instrument
+        return None
     
     def get_all_crypto_instruments(self, date: DateLike = None) -> List[Instrument]:
         """
@@ -312,7 +358,10 @@ class CryptoDataSource(AbstractDataSource):
         if pos >= len(bars) or bars['datetime'][pos] != dt:
             return None
         
-        return bars[pos]
+        bar = bars[pos]
+        # 转换为字典格式，与RQAlpha标准格式保持一致
+        bar_dict = {k: bar[k] if k in bar.dtype.names else np.nan for k in self.CRYPTO_FIELDS}
+        return bar_dict
     
     def get_open_auction_bar(self, instrument, dt):
         """获取集合竞价数据（加密货币没有集合竞价）"""
